@@ -1,0 +1,10 @@
+# 社外秘のデータを扱うこともあるため、外部送信と他PCからのアクセスを無効にする
+[browser]
+gatherUsageStats = false
+
+[server]
+address = "localhost"
+
+[client]
+# 外部公開用の「Deploy」ボタンを出さない
+toolbarMode = "minimal"
