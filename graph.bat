@@ -2,6 +2,9 @@
 chcp 65001 >nul
 setlocal
 
+rem どこから実行しても、この bat があるフォルダで動かす
+cd /d "%~dp0"
+
 echo ============================================
 echo  Graph Maker(グラフ作成ツール) 起動チェック
 echo ============================================
@@ -26,6 +29,7 @@ if errorlevel 1 (
 
 echo 起動します。ブラウザで http://localhost:8501 が開きます。
 echo 終了するには、このウィンドウを閉じてください。
-streamlit run app.py
+rem streamlit コマンドが PATH にない PC でも起動できるよう、python 経由で起動する
+python -m streamlit run app.py
 
 pause

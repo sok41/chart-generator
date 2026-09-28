@@ -1,0 +1,4 @@
+# Windows のコマンドプロンプトは LF 改行の bat を正しく読めないため、bat は必ず CRLF で取り出す
+# (GitHub の「Download ZIP」もこの指定に従う)
+*.bat text eol=crlf
+*.cmd text eol=crlf
