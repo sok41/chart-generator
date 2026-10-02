@@ -98,6 +98,8 @@ class PanelSpec:
     waterfall_total: bool = False
     # バブル用:最大の円の直径(px)
     bubble_max_size: int = 30
+    # バブル用:値ラベルの位置(「円の中央」または「円の右横」)
+    bubble_label_position: str = "円の中央"
     # バブル・ヒートマップ用:行の項目(x_col の値。年など)を横軸に並べるか(False なら縦軸)
     labels_on_x: bool = False
     # 円用
@@ -161,7 +163,7 @@ def _add_panel(fig: go.Figure, df, panel: PanelSpec, row: int, col: int) -> None
                           guide_line=panel.pareto_guide, **at)
     elif kind == "バブル":
         add_bubble_traces(fig, df, panel.x_col, panel.y_cols, max_size=panel.bubble_max_size,
-                          labels_on_x=panel.labels_on_x, **at)
+                          labels_on_x=panel.labels_on_x, label_position=panel.bubble_label_position, **at)
     elif kind == "ヒートマップ":
         add_heatmap_trace(fig, df, panel.x_col, panel.y_cols, color_scale=panel.color_scale,
                           show_scale=panel.show_color_scale, labels_on_x=panel.labels_on_x, **at)

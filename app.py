@@ -15,6 +15,7 @@ from core.data_loader import (
     rows_to_series,
 )
 from core.exporter import export_png
+from charts.bubble import BUBBLE_LABEL_POSITIONS
 from charts.heatmap import COLOR_SCALES
 from charts.pareto import CUMULATIVE_NAME
 from charts.treemap import TREE_MODES
@@ -41,9 +42,21 @@ from core.style import (
     palette_colors,
 )
 
-# Googleスライド(16:9)の標準サイズは 960×540 px。グラフは横半分に貼る想定
-SLIDE_WIDTH = 960
-SLIDE_HALF_WIDTH = SLIDE_WIDTH // 2
+# 出力サイズのプリセット(名前 → 幅, 高さ px)。先頭が既定値
+# スライドの px はアプリ上の標準サイズ(Googleスライド 16:9 = 960×540、PowerPoint 16:9 = 1280×720)。
+# A4 は 96dpi 換算(210×297mm ≒ 794×1123 px)
+CUSTOM_SIZE = "カスタム(幅・高さを直接入力)"
+SIZE_PRESETS: dict[str, tuple[int, int]] = {
+    "Googleスライド 横半分(480×360)": (480, 360),
+    "Googleスライド 全体 16:9(960×540)": (960, 540),
+    "PowerPoint 横半分(640×480)": (640, 480),
+    "PowerPoint 全体 16:9(1280×720)": (1280, 720),
+    "16:9 高解像度(1600×900)": (1600, 900),
+    "A4横(1123×794)": (1123, 794),
+    "A4縦・上下2段向け(794×1123)": (794, 1123),
+    "正方形(1200×1200)": (1200, 1200),
+}
+DEFAULT_SIZE = next(iter(SIZE_PRESETS))
 
 st.set_page_config(page_title="Graph Maker", layout="wide")
 
@@ -351,6 +364,15 @@ def panel_settings(i: int) -> PanelSpec:
     elif chart_type == "バブル":
         with c_opt1:
             spec.bubble_max_size = st.slider("最大の円の直径(px)", 10, 80, 30, key=p + "bubble_size")
+        with c_opt2:
+            spec.bubble_label_position = st.radio(
+                "値ラベルの位置",
+                list(BUBBLE_LABEL_POSITIONS),
+                horizontal=True,
+                key=p + "bubble_label_pos",
+                help="「円の中央」は円を半透明にして数字を中に書きます。「円の右横」は円をそのままの色にして、"
+                "数字を円の外の右側に書きます。値ラベルは「凡例・ラベル」タブでオンにします。",
+            )
     elif chart_type == "ヒートマップ":
         with c_opt1:
             spec.color_scale = st.selectbox("色の種類", list(COLOR_SCALES), key=p + "hm_scale")
@@ -473,7 +495,15 @@ with style_col:
             bg_color = st.color_picker("背景色", value="#FFFFFF")
         with c2:
             grid_color = st.color_picker("目盛線の色", value="#E0E0E0")
-        grid_show = st.checkbox("目盛線を表示", value=True)
+        # 横棒・バブル・ライフサイクル図は横方向にも値や項目を読むので、X軸の目盛線も既定で表示する
+        grid_x_default = any(
+            p.horizontal or p.chart_type in ("バブル", "ライフサイクル図") for p in panels
+        )
+        c1, c2 = st.columns(2)
+        grid_x = c1.checkbox("目盛線を表示(X軸)", value=grid_x_default, key=f"grid_x_{grid_x_default}",
+                             help="X軸の目盛りの位置に縦の線を引きます。")
+        grid_y = c2.checkbox("目盛線を表示(Y軸)", value=True, key="grid_y",
+                             help="Y軸の目盛りの位置に横の線を引きます。")
         frame_auto = st.checkbox(
             "グラフ枠の色を自動にする", value=True, help="文字の色と目盛線の色のちょうど中間の色にします。"
         )
@@ -518,7 +548,8 @@ style = ChartStyle(
     font_color=font_color,
     frame_color=frame_color,
     bg_color=bg_color,
-    grid_show=grid_show,
+    grid_x=grid_x,
+    grid_y=grid_y,
     grid_color=grid_color,
     title_size=int(title_size),
     subtitle_size=int(subtitle_size),
@@ -538,13 +569,37 @@ with preview_col:
 st.header("5. 画像出力")
 
 c_w, c_h, c_s, c_name, c_btn = st.columns([1, 1, 1, 3, 1], vertical_alignment="bottom")
+if "out_w" not in st.session_state:
+    st.session_state.out_w, st.session_state.out_h = SIZE_PRESETS[DEFAULT_SIZE]
+
+
+def _apply_size_preset() -> None:
+    """プリセットを選んだら、幅・高さをその値にする。"""
+    size = SIZE_PRESETS.get(st.session_state.size_preset)
+    if size:
+        st.session_state.out_w, st.session_state.out_h = size
+
+
+def _mark_custom_size() -> None:
+    """幅・高さを直接変えたら、プリセットの表示を「カスタム」にする。"""
+    if SIZE_PRESETS.get(st.session_state.size_preset) != (st.session_state.out_w, st.session_state.out_h):
+        st.session_state.size_preset = CUSTOM_SIZE
+
+
+st.selectbox(
+    "サイズのプリセット",
+    [*SIZE_PRESETS, CUSTOM_SIZE],
+    key="size_preset",
+    on_change=_apply_size_preset,
+    help="選ぶと幅・高さがそのサイズになります。スライドの「横半分」は、スライドの左右どちらかに貼る想定のサイズです。",
+)
+c_w, c_h, c_s, c_name, c_btn = st.columns([1, 1, 1, 3, 1], vertical_alignment="bottom")
 with c_w:
-    width = st.number_input(
-        "幅(px)", min_value=100, max_value=5000, value=SLIDE_HALF_WIDTH, step=10,
-        help=f"既定値はGoogleスライド(16:9、横{SLIDE_WIDTH}px)の横幅の半分です。",
-    )
+    width = st.number_input("幅(px)", min_value=100, max_value=5000, step=10, key="out_w",
+                            on_change=_mark_custom_size)
 with c_h:
-    height = st.number_input("高さ(px)", min_value=100, max_value=5000, value=360, step=10)
+    height = st.number_input("高さ(px)", min_value=100, max_value=5000, step=10, key="out_h",
+                             on_change=_mark_custom_size)
 with c_s:
     scale = st.selectbox(
         "倍率", [1, 2, 3], index=1,

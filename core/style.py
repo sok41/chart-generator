@@ -97,7 +97,9 @@ class ChartStyle:
     font_color: str = "#434343"
     frame_color: str = ""  # 空のときは文字色と目盛線色の中間色
     bg_color: str = "#FFFFFF"
-    grid_show: bool = True
+    # 目盛線:X軸(縦の線)・Y軸(横の線)ごとに表示するか
+    grid_x: bool = False
+    grid_y: bool = True
     grid_color: str = "#E0E0E0"
     title_size: int = 16
     subtitle_size: int = 13
@@ -117,12 +119,6 @@ class ChartStyle:
     def __post_init__(self) -> None:
         if not self.frame_color:
             self.frame_color = mix_colors(self.font_color, self.grid_color)
-
-
-def is_dark(color: str) -> bool:
-    """#RRGGBB の色が暗い(白い文字のほうが読みやすい)かどうか。"""
-    r, g, b = (int(color.lstrip("#")[i:i + 2], 16) / 255 for i in (0, 2, 4))
-    return 0.299 * r + 0.587 * g + 0.114 * b < 0.55
 
 
 def default_color(index: int, palette: list[str] | None = None) -> str:
@@ -230,25 +226,28 @@ def _style_pie(trace, style: ChartStyle, labels: bool) -> None:
     trace.textfont = dict(size=style.axis_size)
 
 
+def _with_alpha(color: str, alpha: float) -> str:
+    """#RRGGBB を透明度付きの rgba() に変換する。"""
+    r, g, b = (int(color.lstrip("#")[i:i + 2], 16) for i in (0, 2, 4))
+    return f"rgba({r},{g},{b},{alpha})"
+
+
 def _style_bubble(trace, color: str, style: ChartStyle, labels: bool) -> None:
     # 横軸の項目名と同じ情報なので、凡例には出さない
     trace.showlegend = False
-    trace.marker.color = color
-    trace.marker.opacity = 0.85
+    # 値ラベルを円の中央に書くときは、塗りを半透明にして(輪郭は元の色)、
+    # 小さい円でも濃い円でも同じ文字色の数字が読めるようにする
+    center_labels = labels and trace.textposition in (None, "middle center")
+    trace.marker.opacity = 1
+    trace.marker.color = _with_alpha(color, 0.35) if center_labels else _with_alpha(color, 0.85)
+    trace.marker.line = dict(color=color, width=1.5) if center_labels else dict(width=0)
     if labels:
         trace.mode = "markers+text"
         # 0件のセルには数字を出さない
         trace.text = [f"{v:,g}" if v else "" for v in trace.customdata]
         trace.texttemplate = None
-        trace.textposition = "middle center"
-        # 濃い色の円の上では白い文字にする。ただし文字が円からはみ出す小さい円は通常の文字色のまま
-        # (面積モードの円の直径は sqrt(2 × 値 / sizeref) px)
-        sizeref = trace.marker.sizeref or 1
-        trace.textfont = dict(size=style.axis_size, color=[
-            "#FFFFFF" if is_dark(color) and (2 * v / sizeref) ** 0.5 >= style.axis_size * 2.2
-            else style.font_color
-            for v in trace.customdata
-        ])
+        # 数字はすべて同じ文字色にする(位置は円の中央か右横。描画時に指定済み)
+        trace.textfont = dict(size=style.axis_size, color=style.font_color)
         trace.cliponaxis = False
     else:
         trace.mode = "markers"
@@ -276,18 +275,11 @@ def _style_waterfall(trace, style: ChartStyle, labels: bool) -> None:
 
 
 def _style_axes(fig: go.Figure, style: ChartStyle) -> None:
-    # 数値を表す軸にだけ目盛線を引く(縦棒・折れ線はY軸、横棒はX軸、バブルは両方)
-    value_axes: set[str] = set()
+    # ヒートマップはセルの隙間で区切るので、その段の軸には目盛線を引かない
+    no_grid_axes: set[str] = set()
     for trace in fig.data:
-        if not _is_xy(trace) or trace.type == "heatmap":
-            continue  # ヒートマップはセルの隙間で区切るので目盛線を引かない
-        if trace.meta in (BUBBLE_META, LIFECYCLE_META):
-            value_axes.add(_axis_name(trace.xaxis, "x"))
-            value_axes.add(_axis_name(trace.yaxis, "y"))
-        elif getattr(trace, "orientation", None) == "h":
-            value_axes.add(_axis_name(trace.xaxis, "x"))
-        else:
-            value_axes.add(_axis_name(trace.yaxis, "y"))
+        if _is_xy(trace) and trace.type == "heatmap":
+            no_grid_axes |= {_axis_name(trace.xaxis, "x"), _axis_name(trace.yaxis, "y")}
 
     axis_names = [k for k in fig.layout.to_plotly_json() if re.fullmatch(r"[xy]axis\d*", k)]
     for name in axis_names:
@@ -302,7 +294,9 @@ def _style_axes(fig: go.Figure, style: ChartStyle) -> None:
             title_font=dict(size=style.axis_size, color=style.font_color),
             zeroline=False,
             automargin=True,
-            showgrid=style.grid_show and name in value_axes and not secondary,
+            # X軸の目盛線は縦の線、Y軸の目盛線は横の線。右軸は左軸と線が重複するので引かない
+            showgrid=(style.grid_x if name.startswith("x") else style.grid_y)
+            and not secondary and name not in no_grid_axes,
             gridcolor=style.grid_color,
         )
 

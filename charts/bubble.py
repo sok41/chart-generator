@@ -8,6 +8,12 @@ from core.data_loader import numeric_series
 # スタイル処理でバブルを見分けるための目印
 BUBBLE_META = "bubble"
 
+# 値ラベルの位置(画面の選択肢 → Plotly の textposition)
+BUBBLE_LABEL_POSITIONS: dict[str, str] = {
+    "円の中央": "middle center",
+    "円の右横": "middle right",
+}
+
 
 def add_bubble_traces(
     fig: go.Figure,
@@ -16,6 +22,7 @@ def add_bubble_traces(
     value_cols: list[str],
     max_size: int = 30,
     labels_on_x: bool = True,
+    label_position: str = "円の中央",
     row: int = 1,
     col: int = 1,
 ) -> None:
@@ -39,6 +46,7 @@ def add_bubble_traces(
                 mode="markers",
                 name=c,
                 meta=BUBBLE_META,
+                textposition=BUBBLE_LABEL_POSITIONS.get(label_position, "middle center"),
                 customdata=values.tolist(),
                 marker=dict(size=values.tolist(), sizemode="area", sizeref=sizeref, sizemin=0,
                             line=dict(width=0)),

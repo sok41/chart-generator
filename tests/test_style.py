@@ -17,9 +17,9 @@ def test_series_color_and_fonts_applied():
     assert fig.layout.title.font.size == 30
 
 
-def test_grid_on_value_axis_for_horizontal_bar():
+def test_grid_x_and_y_switch_separately():
     fig = create_bar_chart(DF, "年", ["件数"], orientation="h")
-    apply_style(fig, ChartStyle(grid_color="#00FF00"))
+    apply_style(fig, ChartStyle(grid_color="#00FF00", grid_x=True, grid_y=False))
     assert fig.layout.xaxis.showgrid is True
     assert fig.layout.xaxis.gridcolor == "#00FF00"
     assert fig.layout.yaxis.showgrid is False

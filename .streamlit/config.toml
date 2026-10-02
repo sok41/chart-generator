@@ -8,3 +8,7 @@ address = "localhost"
 [client]
 # 外部公開用の「Deploy」ボタンを出さない
 toolbarMode = "minimal"
+
+[theme]
+# OS やブラウザのダークモード設定によらず、常に白背景(ライトテーマ)で表示する
+base = "light"

@@ -37,7 +37,7 @@ def test_waterfall_panel_and_colors():
 
 def test_bubble_from_cross_table():
     panel = PanelSpec("バブル", "企業", ["通信", "AI", "半導体"], bubble_max_size=40)
-    fig = apply_style(build_figure(CROSS, [panel]), ChartStyle(data_labels=True))
+    fig = apply_style(build_figure(CROSS, [panel]), ChartStyle(data_labels=True, grid_x=True))
     assert len(fig.data) == 3
     g06f = fig.data[0]
     assert list(g06f.x) == ["通信", "通信"]
@@ -58,9 +58,21 @@ def test_bubble_labels_on_x_axis():
     assert list(fig.data[0].x) == ["2017", "2018"]  # 年が横軸
     assert list(fig.data[0].y) == ["全体", "全体"]  # 項目が縦軸
     assert list(fig.layout.yaxis.categoryarray) == ["全体", "ドア"]
-    # 濃い色の大きい円は白文字、薄い色の円は通常の文字色
-    assert list(fig.data[0].textfont.color) == ["#FFFFFF", "#FFFFFF"]
-    assert "#FFFFFF" not in list(fig.data[1].textfont.color)
+    # 値ラベルを中央に書くときは、数字はすべて文字色、円は半透明の塗り+元の色の輪郭
+    assert all(t.textfont.color == "#434343" for t in fig.data)
+    assert fig.data[0].textposition == "middle center"
+    assert fig.data[0].marker.color == "rgba(8,48,107,0.35)"
+    assert fig.data[0].marker.line.color == "#08306B"
+
+
+def test_bubble_labels_right_of_circle():
+    yearly = pd.DataFrame({"年": ["2017", "2018"], "全体": ["118", "110"]})
+    panel = PanelSpec("バブル", "年", ["全体"], labels_on_x=True, bubble_label_position="円の右横")
+    fig = apply_style(build_figure(yearly, [panel]), ChartStyle(data_labels=True, palette=["#08306B"]))
+    trace = fig.data[0]
+    assert trace.textposition == "middle right"
+    assert trace.textfont.color == "#434343"
+    assert trace.marker.color == "rgba(8,48,107,0.85)"  # 右横に書くときは円を濃いまま
 
 
 def test_heatmap_labels_on_x_axis():
